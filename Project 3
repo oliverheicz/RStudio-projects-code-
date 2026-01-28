@@ -1,0 +1,172 @@
+Please find the code for the 3rd project as part of my course:
+
+---
+title: "Assignment 4"
+subtitle: "Data Visualisation"
+author: "Olivér Heicz"
+date: "`r Sys.Date()`"
+papersize: a4
+geometry: top=1cm, margin=4cm
+colorlinks: true
+output:
+  pdf_document:
+    extra_dependencies: ["placeins"]
+    number_sections: false
+header-includes:
+  - \usepackage{float}
+---
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(tidyverse)
+data("nlschools", package = "MASS")
+
+# Data Preparation
+nlschools2 <-
+  as_tibble(nlschools) %>%
+  mutate(COMB = fct_recode(COMB, "single-grade" = "0", "multi-grade" = "1"))
+```
+
+# Task 1
+
+In this task we are working with the nlschools dataset. The data set features information on 11-year old pupils in the Netherlands. It contains 7,681 observations of students from 215 primary schools in the Netherlands. Each observation represents a student and includes information about their class characteristics and test performance, especially in language tests.
+
+**Variables:**
+
+- **lang**: Language test score
+- **IQ**: IQ score of the student 
+- **GS**: Class size: number of 11-year old students recorded in the class
+- **COMB**: students taught in a multi-grade class or single-grade class (binary: 0/1) 
+- **SES**: Socioeconomic status of student's family
+- **class**: class ID
+
+The dataset examines how each variable, such as the class size, the type of class has an effect on the individual's preparation and actual performance on language tests. On the plot below we are visualizing this relation between the characteristics and the test results.
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, fig.width=7, fig.height=6, out.width="75%", fig.cap="The relationship between class size, the type of class (single or multi-grade), and the score on the language test.", fig.pos="H"}
+# Visualization
+p <- nlschools2 %>%
+  ggplot(aes(x = IQ, y = lang, color = COMB, fill = COMB)) +
+  geom_point(alpha = 0.4, size = 2) +
+  geom_smooth(method = "loess", se = TRUE, alpha = 0.2, linewidth = 1) +
+  facet_wrap(~COMB) +
+  labs(
+    x = "Class Size",
+    y = "Language Test Score",
+    color = "Class Type",
+    fill = "Class Type"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 14),
+    panel.grid.minor = element_blank()
+  )
+
+print(p)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Summary statistics by class type
+nlschools2 %>%
+  group_by(COMB) %>%
+  summarise(
+    n = n(),
+    mean_language_score = mean(lang, na.rm = TRUE),
+    sd_language_score = sd(lang, na.rm = TRUE),
+    mean_class_size = mean(IQ, na.rm = TRUE),
+    sd_class_size = sd(IQ, na.rm = TRUE)
+  )
+
+# Correlation analysis
+nlschools2 %>%
+  group_by(COMB) %>%
+  summarise(
+    correlation = cor(IQ, lang, use = "complete.obs")
+  )
+```
+Looking at the plot, it reveals that greater language test points could be linked to a bigger class size, in contrary to what people would think in general. Multi-grade classes show higher improvement with bigger class size, maybe owing to the fact that students motivate each other creating a rich learning experience.
+
+# Task 2
+
+In Task 1, we ignored the fact that the observations belong to different classes. This may be problematic because in each class the scores among students are related because they are studying from the same resources and taught by the same teacher and are influenced by each other. That is why, in this task we use the group-by-summarize method that creates unique groups which stands for each classes for every combination of class, GS, and COMB.
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Summarize data at the class level
+nlschools_class <-
+  nlschools2 %>%
+  group_by(class, GS, COMB) %>%
+  summarize(
+    mean_language_score = mean(lang, na.rm = TRUE),
+    class_size = mean(IQ, na.rm = TRUE),
+    n_students = n(),
+    .groups = "drop"
+  )
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, fig.cap="The mean of language scores for each class.", fig.pos="H"}
+p2 <- nlschools_class %>%
+  ggplot(aes(x = class_size, y = mean_language_score, color = COMB, fill = COMB)) +
+  geom_point(size = 3, alpha = 0.6) +
+  geom_smooth(method = "loess", se = TRUE, alpha = 0.2, linewidth = 1) +
+  facet_wrap(~COMB) +
+  labs(
+    x = "Class Size",
+    y = "Mean Language Test Score",
+    color = "Class Type",
+    fill = "Class Type"
+  ) +
+  theme_minimal()
+
+print(p2)
+```
+
+\FloatBarrier
+
+Task 1 plotted 7,681 individual students, with each point representing one student's language test score and their class's size. Now, the plot visualizes each class levels mean performance. We differentiate 215 classes. For both single and multi-grade classes a positive relationship can be seen. For single-grade classes this relationship is higher, classes have similar IQ ranges and as it increases, the performance on language tests shows high growth. Multi-grade classes show lower IQ ranges and a slower-moving improvement can be seen as well.
+
+# Task 3
+
+In the final task we add the the SES - social economic status of student's family, and taking the same approach as in Task 1. For better interpretation we cut the new variable into three categories: Low, Medium, and High SES.
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Create SES categories using cut_number to create equal-sized groups
+nlschools3 <- nlschools2 %>%
+  mutate(SES_category = cut_number(SES, n = 3, labels = c("Low SES", "Medium SES", "High SES")))
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, fig.cap= " Language test scores based on the the class size, class type and the social-economic status of the student.", fig.pos="H"}
+
+# Visualization: Class size vs Language score, colored by SES, faceted by Class Type
+
+p3 <- nlschools3 %>%
+  
+  ggplot(aes(x = IQ, y = lang, color = SES_category)) +
+  geom_point(alpha = 0.3, size = 1.5) +
+  geom_smooth(method = "loess", se = TRUE, alpha = 0.15, linewidth = 1) +
+  facet_wrap(~COMB) +
+  scale_color_manual(values = c("Low SES" = "#d73027", "Medium SES" = "orange", "High SES" = "#1a9850")) +
+  labs(
+    x = "Class Size",
+    y = "Language Test Score",
+    color = "Socioeconomic Status"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 14),
+    panel.grid.minor = element_blank()
+  )
+print (p3)
+```
+
+\FloatBarrier
+
+Adding SES creates quite different results compared to the other two plots. The social-economic variable has a big impact on the individual students performance. In both single-grade and multi-grade classes, high-SES students have better performance than low-SES and medium-SES students across all class sizes. This could be explained by those students can afford better resources such as private teachers, extra books and so on. The trend line of the highest SES is significantly higher than the others. Students from higher socioeconomic backgrounds maintain high test results independent of class size, indicating a flatter relationship between performance and class size. As for the low and medium SES students the trend line is steeper than high SES. It looks like that two groups benefit more noticeably from larger class sizes rather than the other SES statuses. In multi-grade classes, low-SES students show better improvement with class size, suggesting that mixed-age classrooms may provide some benefits for low socioeconomic status students.
+
+\FloatBarrier
+
+# Appendix
+
+In this assignment I used AI only for clarification of R syntax questions, and for advice on formatting issues. All R code in this assignment was written by me.
+
