@@ -1,0 +1,186 @@
+Please find my code for a final project for my Data Visualisation class:
+
+---
+title: "Project Work - How do lot size, number of rooms, and amenities
+affect housing prices?"
+author: "Olivér Heicz"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    number_sections: yes
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.width = 7, fig.height = 4.5, fig.align = 'center')
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(Ecdat)
+library(scales)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Introduction
+
+## Data Set Description
+
+The main research of this assignment is to reveal how different characteristics determine the selling price of houses, most specifically we will analyse how do the lot size, number of rooms, and amenities affect housing prices. Understanding which features contribute most to home value can help both buyers and sellers make better decisions in the housing market.Therefore, we work with the `Ecdat` package, specifically with the `Housing` dataset. This dataset contains information about residential properties sold in a town called Windsor, in Canada. The data includes characteristics of homes such as their prices, lot sizes, number of rooms, and available amenities.
+
+We call the dataset through:
+
+```{r eval=FALSE, echo=TRUE}
+library(Ecdat)
+data(Housing)
+```
+
+The dataset contains 546 observations across 12 variables:
+
+- **Price**: Sale price of the home in Canadian dollars
+- **Lot Size**: Size of the property lot in square feet
+- **Bedrooms**: Number of bedrooms
+- **Bathrms**: Number of bathrooms
+- **Stories**: Number of floors in the house
+- **Driveway**: Whether the house has a driveway (yes/no)
+- **Recroom**: Whether there is a recreation room (yes/no)
+- **Fullbase**: Whether the house has a full basement (yes/no)
+- **Gashw**: Whether the house uses gas for hot water heating (yes/no)
+- **Airco**: Whether the house has air conditioning (yes/no)
+- **Garagepl**: Number of garage parking spaces
+- **Prefarea**: Whether the house is in a preferred neighborhood (yes/no)
+
+
+```{r data-prep}
+# Load the data
+data(Housing)
+
+# Prepare the data
+homes <- Housing %>%
+  mutate(
+    price_k = price / 1000,  # Convert to thousands for readability
+    total_rooms = bedrooms + bathrms,
+    has_garage = ifelse(garagepl > 0, "Yes", "No"),
+    # Create amenity categories
+    amenity_count = (airco == "yes") + (fullbase == "yes") + 
+                    (garagepl > 0) + (prefarea == "yes"),
+    amenity_level = case_when(
+      amenity_count <= 1 ~ "Basic",
+      amenity_count == 2 ~ "Standard",
+      amenity_count >= 3 ~ "Premium"
+    ),
+    amenity_level = factor(amenity_level, 
+                          levels = c("Basic", "Standard", "Premium"))
+  )
+```
+
+# Analysis
+
+## Lot size and price across different house types
+
+Firstly, we analyse how the lot size, which is the total land in which the house stands including the land area around the house determine the price. Secondly, we will differentiate houses by the number of  stories the houses have up to 4 stories. Figure 1 shows the relationship between lot size and price, with houses colored by the number of stories they have.
+
+```{r fig1, fig.cap="The relationship between lot size and housing prices. Each point represents one house, colored by the number of stories. The line shows the overall trend."}
+ggplot(homes, aes(x = lotsize, y = price_k, color = factor(stories))) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "black", linewidth = 1.2) +
+  scale_color_brewer(palette = "Set1", name = "Stories") +
+  scale_x_continuous(labels = comma_format()) +
+  scale_y_continuous(labels = dollar_format(prefix = "$", suffix = "k")) +
+  labs(
+    x = "Lot Size (square feet)",
+    y = "Sale Price (thousands CAD)",
+  ) +
+  theme(legend.position = "top")
+```
+
+As Figure 1 states, we can see that lot size has a definite positive relationship with price. This indicates, that larger lots generally mean higher prices, as shown by the trend line. Houses with different number of stories naturally tend to be priced differently. As it is clear, 2-story homes colored with blue is very common across all price ranges. Single-story homes (red) appear more frequently at lower price points, due to the fact that usually these houses have smaller square meters area, therefore it can be sold for a lower price compared to multi-story houses. Homes with three and four-stories (green and purple) are less common but typically sell for higher prices. This suggests that buyers obligated to pay more for both the land area and the vertical space that additional stories provide.
+
+## Number of rooms and it's price by amenity level
+
+Next, we investigate how the number of rooms influences prices, and whether this relationship varies depending on the amenities a home has. To do so, a derived variable called "amenities" was created by combining variables such as airco, fullbase, garagepl, prefarea. For better understanding, we cut the new variable into three different category levels. Now the houses are categorized into basic (0-1 amenities) standard (exactly 2 amenities) and premium (3-4 amenities) categories. Figure 2 shows housing prices by the number of rooms, with separate panels for
+basic, standard, and premium amenity levels.
+
+```{r fig2, fig.cap="Housing prices by total number of rooms, shown separately for basic, standard, and premium amenity levels. Basic homes have 0-1 amenities, standard homes have 2 amenities, and premium homes have 3-4 amenities (air conditioning, full basement, garage, preferred area)."}
+ggplot(homes, aes(x = factor(total_rooms), y = price_k, fill = amenity_level)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~amenity_level, ncol = 3) +
+  scale_fill_brewer(palette = "RdYlGn", direction = 1) +
+  scale_y_continuous(labels = dollar_format(prefix = "$", suffix = "k")) +
+  labs(
+    x = "Total Number of Rooms (Bedrooms + Bathrooms)",
+    y = "Sale Price (thousands CAD)",
+  ) +
+  theme(legend.position = "none")
+```
+
+Figure 2 shows two clear patterns. Firstly, within each amenity category, houses with more rooms sell for higher prices. It is explained by how the median price rises as we move from a house with 3 rooms to 6 rooms. Secondly, amenity level has a large effect on price. Premium homes sell for more than basic homes even if they have the same number of rooms. For example, a premium home with 4 rooms sells for around 70,000-80,000 CAD, while a basic home with 4 rooms might only sell for 40,000-50,000 CAD. This shows that amenities add significant value beyond just the number of rooms.
+
+## Average prices by key features
+
+In the next analysis, we examine which specific earlier-mentioned amenity features contribute most to housing prices. Figure 3 shows the average prices for homes with and without the four key amenities.
+
+```{r fig3-option1, fig.cap="OPTION 1: Simple bar chart showing average prices for homes with and without key amenities."}
+# Prepare data for amenities comparison
+amenity_summary <- homes %>%
+  summarise(
+    `Air Conditioning_No` = mean(price_k[airco == "no"]),
+    `Air Conditioning_Yes` = mean(price_k[airco == "yes"]),
+    `Full Basement_No` = mean(price_k[fullbase == "no"]),
+    `Full Basement_Yes` = mean(price_k[fullbase == "yes"]),
+    `Garage_No` = mean(price_k[has_garage == "No"]),
+    `Garage_Yes` = mean(price_k[has_garage == "Yes"]),
+    `Preferred Area_No` = mean(price_k[prefarea == "no"]),
+    `Preferred Area_Yes` = mean(price_k[prefarea == "yes"])
+  ) %>%
+  pivot_longer(everything(), names_to = "Feature", values_to = "Avg_Price") %>%
+  separate(Feature, into = c("Amenity", "Has_Feature"), sep = "_")
+```
+
+```{r fig3-option2, fig.cap="Dot plot showing price differences for each amenity."}
+# OPTION 2: Dot plot with connecting lines
+ggplot(amenity_summary, aes(x = Has_Feature, y = Avg_Price, color = Amenity, group = Amenity)) +
+  geom_line(linewidth = 1, alpha = 0.5) +
+  geom_point(size = 5) +
+  scale_color_brewer(palette = "Set1", name = "Amenity") +
+  scale_y_continuous(labels = dollar_format(prefix = "$", suffix = "k")) +
+  labs(
+    x = "Has Feature",
+    y = "Average Price (thousands CAD)",
+  ) +
+  theme(legend.position = "right")
+```
+As the figure plots, it is quite obvious that houses with the key amenity features will sell for much higher prices. It can also be seen that potential buyers have a significant desire for houses with good location, coming along with air conditioning. A smaller price gap is seen for housing features such as garage and basement, meaning that buyers set smaller value in the decision making when buying a house.
+
+## Combined effects of lot size and amenities on price
+
+As for the last analysis, we explore the relationship between  lot size and amenities, and how they work together to determine prices. Figure 4 shows the relationship between lot size and price for homes with amenity levels, (basic, standard, premium).
+```{r fig4, fig.cap="Relationship between lot size and price for homes with different amenity levels. Each line represents homes with basic (0-1 amenities), standard (2 amenities), or premium (3-4 amenities) features."}
+ggplot(homes, aes(x = lotsize, y = price_k, color = amenity_level)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+  scale_color_manual(values = c("Basic" = "#E63946",
+                                "Standard" = "#F77F00",
+                                "Premium" = "#06D6A0"),
+                     name = "Amenity Level") +
+  scale_x_continuous(labels = comma_format()) +
+  scale_y_continuous(labels = dollar_format(prefix = "$", suffix = "k")) +
+  labs(
+    x = "Lot Size (square feet)",
+    y = "Sale Price (thousands CAD)",
+    title = "Lot Size and Price by Amenity Level"
+  ) +
+  theme(legend.position = "top")
+```
+
+Figure 4 shows how lot size and amenities work together to affect prices. The three colored lines show trends for basic (red), standard (orange), and premium (green) homes. All three lines slope upward, confirming that lot size matters regardless of amenity level. However, the spacing between the lines shows that amenities add more value on top of lot size.At any given lot size, premium homes sell for substantially more than basic homes. For example, on a 5,000 square foot lot, a premium home might sell for around $80,000, while a basic home might only sell for around $50,000. This represents a $30,000 price difference just from having more amenities. 
+
+# Conclusion
+
+This analysis examined how lot size, room count, and amenities affect housing prices using data from 546 homes in Windsor, Canada. The findings reveal several important patterns in how these characteristics determine property values.
+Lot size demonstrated a clear positive relationship with price for all property types, with houses on larger lots generally sell for more. Multi-story homes and homes with more rooms tend to occupy larger lots and therefore, will sell for higher prices. This shows that buyers actually value both land area and interior space.
+Amenity level has a major impact on housing prices, often exceeding the need for a big lot size. Premium homes, (that comes with 3-4 amenities in this study) such as air conditioning, full basements, garages, and preferred area locations sell for $20,000-30,000 more than basic homes with 0-1 amenities, even if those homes come with the same number of rooms. Location in a preferred area shows particularly large price differences, followed by air conditioning and garages, suggesting that buyers highly value modern conveniences and desirable locations.
+The lot size and amenities relation reveals that these factors work together to determine price. At any given lot size, homes with more amenities sell for significantly higher prices.
+For home buyers, these findings suggest focusing on properties that offer good value in multiple dimensions rather than prioritizing a single characteristic. For sellers, investing in amenities like air conditioning or ensuring the property is in a preferred area may come with good investment returns.
